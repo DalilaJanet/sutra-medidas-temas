@@ -8,7 +8,10 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Iterator
 from urllib.parse import urljoin
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
+urllib3.disable_warnings(InsecureRequestWarning)
 import requests
 from bs4 import BeautifulSoup
 from dateutil import parser as dateparser
@@ -37,7 +40,7 @@ class Measure:
     palabras_clave: list[str]
 
 
-def http_get(session: requests.Session, url: str, timeout: int = 30) -> str:
+def http_get(session: requests.Session, url: str, timeout: int = 30, verify: bool = True) -> str:
     r = session.get(url, timeout=timeout, verify=verify)
     r.raise_for_status()
     return r.text
