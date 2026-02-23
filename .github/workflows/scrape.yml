@@ -36,3 +36,9 @@ jobs:
           git add data/medidas_filtradas.json
           git commit -m "Update medidas_filtradas.json" || echo "No changes"
           git push
+
+      - name: Install CA certificates
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates
+          sudo update-ca-certificates
