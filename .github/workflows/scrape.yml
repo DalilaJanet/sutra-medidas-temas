@@ -27,7 +27,7 @@ jobs:
 
       - name: Run scraper
         run: |
-          python src/sutra_scraper.py --max-pages 800 --delay 0.25 --out data/medidas_filtradas.json
+          python src/sutra_scraper.py --max-pages 200 --delay 0.25 --out data/medidas_filtradas.json
 
       - name: Commit results
         run: |
