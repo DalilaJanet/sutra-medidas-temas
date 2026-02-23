@@ -9,6 +9,8 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    env:
+      ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
