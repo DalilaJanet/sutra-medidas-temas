@@ -38,10 +38,12 @@ class Measure:
 
 
 def http_get(session: requests.Session, url: str, timeout: int = 30) -> str:
-    r = session.get(url, timeout=timeout)
+    r = session.get(url, timeout=timeout, verify=verify)
     r.raise_for_status()
     return r.text
-
+    
+def is_sutra(url: str) -> bool:
+    return url.startswith("https://sutra.oslpr.org")
 
 def find_detail_links(list_html: str) -> list[str]:
     soup = BeautifulSoup(list_html, "lxml")
@@ -133,7 +135,7 @@ def brief_summary_from_title(title: str) -> str:
 def iter_list_pages(session: requests.Session, max_pages: int, delay_s: float, timeout: int) -> Iterator[str]:
     for p in range(1, max_pages + 1):
         url = f"{LIST_URL}?page={p}"
-        html = http_get(session, url, timeout=timeout)
+        html = http_get(session, url, timeout=timeout, verify=not is_sutra(url))
         yield html
         if delay_s:
             time.sleep(delay_s)
@@ -194,7 +196,7 @@ def scrape(max_pages: int, delay_s: float, timeout: int, output_path: str) -> li
     # 2) Visitar detalle, extraer campos, filtrar por keywords explícitas
     for url in tqdm(sorted(detail_urls), desc="Detail pages"):
         try:
-            detail_html = http_get(session, url, timeout=timeout)
+            detail_html = http_get(session, url, timeout=timeout, verify=not is_sutra(url))
         except Exception:
             continue
 
