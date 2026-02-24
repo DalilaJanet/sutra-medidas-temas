@@ -8,7 +8,7 @@ y filtra solo aquellas que mencionan explícitamente al menos uno de estos temas
 - Municipio de San Juan
 - Trabajadores
 - Salarios
-
+ 
 ## Salida
 Genera: `data/medidas_filtradas.json` con los campos:
 1) numero_o_nombre
