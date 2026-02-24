@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from dateutil import parser as dateparser
 from tqdm import tqdm
 
-from keywords import build_topics, extract_keywords
+from src.keywords import build_topics, extract_keywords
 
 
 BASE = "https://sutra.oslpr.org"
