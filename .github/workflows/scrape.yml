@@ -24,7 +24,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
+          
+      - name: Debug - show http_get signature
+        run: |
+          python -c "import inspect; import src.sutra_scraper as s; print(inspect.signature(s.http_get)); print(s.__file__)"
+      
       - name: Run scraper
         run: |
           python src/sutra_scraper.py --max-pages 200 --delay 0.25 --out data/medidas_filtradas.json
