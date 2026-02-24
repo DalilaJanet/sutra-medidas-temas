@@ -150,7 +150,6 @@ def send_to_zapier(measure: Measure) -> None:
         return
 
     payload = {
-        # ID útil para evitar duplicados en Zapier
         "id_unico": measure.numero_o_nombre,
         "numero_o_nombre": measure.numero_o_nombre,
         "titulo_completo": measure.titulo_completo,
@@ -159,21 +158,11 @@ def send_to_zapier(measure: Measure) -> None:
         "palabras_clave": measure.palabras_clave,
         "url": measure.url,
     }
-    headers = {
-        "Content-Type": "application/json"
-    }
 
-    r = requests.post(
-        ZAPIER_WEBHOOK_URL,
-        headers=headers,
-        json=payload,
-        timeout=15
-    )
-
-    print("Zapier response:", r.status_code, r.text)
     try:
-        r = requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=15)
-        r.raise_for_status()
+        r = requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=20)
+        if r.status_code >= 400:
+            print(f"[WARN] Zapier HTTP {r.status_code}: {r.text[:300]}")
     except Exception as e:
         print(f"[WARN] Error enviando a Zapier ({measure.numero_o_nombre}): {e}")
 
