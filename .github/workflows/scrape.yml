@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # Corre diariamente a las 6:15am Puerto Rico (~10:15 UTC, ajusta si quieres)
-    - cron: "00 20 * * *"
+    - cron: "00 7 * * *"
 
 jobs:
   scrape:
