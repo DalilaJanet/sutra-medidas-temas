@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # 6:00am Puerto Rico = 10:00 UTC (PR no usa DST)
-    - cron: "0 10 * * *"
+    - cron: "40 19 * * *"
 
 permissions:
   contents: write
