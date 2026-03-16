@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # 6:00am Puerto Rico = 10:00 UTC (PR no usa DST)
-    - cron: "00 02 * * *"
+    - cron: "00 10 * * *"
 
 permissions:
   contents: write
@@ -13,7 +13,7 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     env:
-      ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
+      ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
 
     steps:
       - name: Checkout
@@ -51,7 +51,7 @@ jobs:
           MAX_PAGES: "1025"
           MAX_DETAILS: "250"
           DAYS_BACK: "1"
-        run: python -u sutra_watch.py
+        run: python -u src/sutra_watch.py
 
       - name: Commit results
         run: |
