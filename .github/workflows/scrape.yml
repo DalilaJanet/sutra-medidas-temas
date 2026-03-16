@@ -44,14 +44,12 @@ jobs:
         run: |
           python -c "import inspect; import sutra_watch.py as s; print(inspect.signature(s.http_get)); print(s.__file__)"
 
-      - name: Run scraper
-        run: |
-          python -m sutra_watch.py --max-pages 200 --delay 0.25 --timeout 60 --out data/medidas_filtradas.json
-
-      - name: Debug - list outputs
-        run: |
-          ls -la
-          ls -la data || true
+      - name: Run script
+        env:
+          ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
+          STATE_PATH: state.json
+          MAX_DETAILS: "80"
+        run: python -u sutra_watch.py
 
       - name: Commit results
         run: |
