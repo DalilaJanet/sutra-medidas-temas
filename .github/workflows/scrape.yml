@@ -48,9 +48,9 @@ jobs:
         env:
           ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
           STATE_PATH: state.json
-          MAX_PAGES: "25"
+          MAX_PAGES: "1025"
           MAX_DETAILS: "250"
-          DAYS_BACK: "90"
+          DAYS_BACK: "1"
         run: python -u sutra_watch.py
 
       - name: Commit results
