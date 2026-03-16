@@ -48,26 +48,29 @@ def stable_id(url: str, measure: str, title: str) -> str:
 
 def http_get(session: requests.Session, url: str, timeout: int = 25) -> str:
     last_err = None
+
     for i in range(3):
         try:
-            print(f"[GET] {url} (attempt {i + 1})")
+            print(f"[GET] {url}")
             r = session.get(url, timeout=timeout, verify=False)
             r.raise_for_status()
-            print(f"[GET OK] {url} status={r.status_code} bytes={len(r.text)}")
             return r.text
         except Exception as e:
             last_err = e
-            print(f"[GET ERROR] {url}: {e}")
-            time.sleep(2 * (i + 1))
+            print(f"[GET ERROR] {e}")
+            time.sleep(2)
+
     raise RuntimeError(f"GET failed for {url}: {last_err}")
 
 
 def extract_detail_links(list_html: str, base_url: str) -> List[str]:
     soup = BeautifulSoup(list_html, "lxml")
+
     links = []
 
     for a in soup.select("a[href]"):
         href = (a.get("href") or "").strip()
+
         if not href:
             continue
 
@@ -81,41 +84,41 @@ def extract_detail_links(list_html: str, base_url: str) -> List[str]:
         if "sutra.oslpr.org" not in full:
             continue
 
-        if any(seg in full for seg in ("/proyectos/", "/resoluciones/", "/ordenanzas/", "/leyes/", "/medidas/")):
+        if "/medidas/" in full:
             links.append(full)
 
+    # quitar duplicados
     seen = set()
     out = []
-    for url in links:
-        if url not in seen:
-            seen.add(url)
-            out.append(url)
+
+    for u in links:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
 
     return out
 
 
 def parse_detail_page(detail_html: str, url: str) -> Dict:
+
     soup = BeautifulSoup(detail_html, "lxml")
     text = soup.get_text(" ", strip=True)
 
     m = MEASURE_CODE_RE.search(text)
+
     measure = m.group(0).upper().replace(" ", "") if m else ""
 
     title = ""
+
     h1 = soup.find(["h1", "h2"])
+
     if h1 and h1.get_text(strip=True):
         title = h1.get_text(" ", strip=True)
+
     elif soup.title and soup.title.get_text(strip=True):
         title = soup.title.get_text(" ", strip=True)
 
-    summary = ""
-    if title:
-        idx = text.lower().find(title.lower())
-        if idx >= 0:
-            summary = text[idx: idx + 700]
-
-    if not summary:
-        summary = text[:700]
+    summary = text[:700]
 
     return {
         "url": url,
@@ -127,179 +130,146 @@ def parse_detail_page(detail_html: str, url: str) -> Dict:
 
 
 def keyword_hits(text: str, keywords: List[str]) -> List[str]:
+
     t = text.lower()
+
     hits = []
+
     for kw in keywords:
         if kw.lower() in t:
             hits.append(kw)
+
     return hits
 
 
-def build_email_body_for_items(items: List[Dict]) -> str:
-    lines = []
-    lines.append("Saludos,")
-    lines.append("")
-    lines.append("Se identificaron nuevas medidas relevantes en SUTRA:")
-    lines.append("")
+def post_to_zapier(session, hook, payload):
 
-    for it in items:
-        measure = it.get("measure") or "(sin código detectado)"
-        title = it.get("title") or "(sin título)"
-        hits = ", ".join(it.get("hits", [])) or "(sin coincidencias detectadas)"
-        url = it.get("url") or ""
+    print("[POST] Sending to Zapier")
+    print(json.dumps(payload)[:500])
 
-        lines.append(f"- {measure} — {title}")
-        lines.append(f"  Palabras clave: {hits}")
-        if url:
-            lines.append(f"  Enlace: {url}")
-        lines.append("")
+    r = session.post(hook, json=payload, timeout=25)
 
-    lines.append("Atentamente,")
-    return "\n".join(lines).strip()
+    print("[POST STATUS]", r.status_code)
 
-
-def build_email_body_empty() -> str:
-    return (
-        "Saludos,\n\n"
-        "Para el día de hoy no se encontraron proyectos relevantes "
-        "relacionados con los criterios establecidos.\n\n"
-        "Atentamente,"
-    )
-
-
-def post_to_zapier(session: requests.Session, hook_url: str, payload: Dict) -> None:
-    print("[POST] Sending payload to Zapier...")
-    print(json.dumps(payload, ensure_ascii=False, indent=2)[:4000])
-
-    r = session.post(hook_url, json=payload, timeout=25)
-    print(f"[POST RESPONSE] status={r.status_code}")
-    print(r.text[:1000])
-
-    r.raise_for_status()
+    return r.status_code
 
 
 def main():
-    zapier_hook = (os.environ.get("ZAPIER_HOOK_URL") or "").strip()
+
+    zapier_hook = os.environ.get("ZAPIER_HOOK_URL", "").strip()
+
     if not zapier_hook:
-        raise SystemExit("Missing env var ZAPIER_HOOK_URL")
+        print("Missing ZAPIER_HOOK_URL")
+        return
 
     state_path = os.environ.get("STATE_PATH", "state.json")
-    keywords = (os.environ.get("KEYWORDS") or "").strip()
-    kw_list = [k.strip() for k in keywords.split("|") if k.strip()] if keywords else DEFAULT_KEYWORDS
-    max_details = int(os.environ.get("MAX_DETAILS", "80"))
 
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    now_iso = now_utc.isoformat()
+    kw_list = DEFAULT_KEYWORDS
+
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
 
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": "sutra-monitor/1.0 (contact: IT)",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    })
+
+    session.headers.update(
+        {
+            "User-Agent": "sutra-monitor",
+        }
+    )
 
     try:
+
         state = load_state(state_path)
         seen = state["seen"]
 
-        print("[INFO] Loading main medidas page...")
+        print("Downloading medidas page...")
+
         list_html = http_get(session, SUTRA_MEDIDAS_URL)
-        print(f"[INFO] HTML length from /medidas: {len(list_html)}")
 
-        detail_links = extract_detail_links(list_html, "https://sutra.oslpr.org")
-        print(f"[INFO] Detail links found: {len(detail_links)}")
+        print("HTML size:", len(list_html))
 
-        for link in detail_links[:20]:
-            print(f"[LINK] {link}")
+        links = extract_detail_links(list_html, "https://sutra.oslpr.org")
 
-        new_matches: List[Dict] = []
+        print("Detail links found:", len(links))
 
-        for url in detail_links[:max_details]:
+        new_items = []
+
+        for url in links[:80]:
+
             try:
                 html = http_get(session, url)
-            except Exception as e:
-                print(f"[WARN] Skipping detail URL due to error: {url} -> {e}")
+            except Exception:
                 continue
 
             item = parse_detail_page(html, url)
-            combined = f"{item.get('title', '')} {item.get('full_text', '')}"
+
+            combined = item["title"] + " " + item["full_text"]
+
             hits = keyword_hits(combined, kw_list)
 
             if not hits:
                 continue
 
-            item_id = stable_id(item["url"], item.get("measure", ""), item.get("title", ""))
+            item_id = stable_id(item["url"], item["measure"], item["title"])
+
             if item_id in seen:
-                print(f"[SEEN] Already processed: {item.get('measure', '')} {item.get('title', '')}")
                 continue
 
             item["id"] = item_id
             item["hits"] = hits
-            new_matches.append(item)
 
-        print(f"[INFO] New relevant matches found: {len(new_matches)}")
+            new_items.append(item)
 
-        if new_matches:
-            for item in new_matches:
+        print("New matches:", len(new_items))
+
+        if new_items:
+
+            for item in new_items:
+
                 payload = {
-                    "source": "sutra.oslpr.org",
-                    "checked_at_utc": now_iso,
                     "measure": item.get("measure", ""),
                     "title": item.get("title", ""),
                     "summary": item.get("summary", ""),
                     "hits": ", ".join(item.get("hits", [])),
                     "url": item.get("url", ""),
+                    "checked_at": now,
                     "is_empty": False,
-                    "error": False,
-                    "status_message": "Nueva medida relevante encontrada",
-                    "email_body": build_email_body_for_items([item]),
                 }
 
                 post_to_zapier(session, zapier_hook, payload)
 
-                seen[item["id"]] = now_iso
+                seen[item["id"]] = now
 
             save_state(state_path, state)
-            print("[INFO] state.json updated.")
+
         else:
+
             payload = {
-                "source": "sutra.oslpr.org",
-                "checked_at_utc": now_iso,
                 "measure": "",
                 "title": "",
                 "summary": "",
                 "hits": "",
                 "url": "",
+                "checked_at": now,
                 "is_empty": True,
-                "error": False,
-                "status_message": "No se encontraron medidas relevantes hoy.",
-                "email_body": build_email_body_empty(),
+                "status": "No relevant measures found today",
             }
 
             post_to_zapier(session, zapier_hook, payload)
-            print("[INFO] Empty result notification sent to Zapier.")
 
     except Exception as e:
-        error_payload = {
-            "source": "sutra.oslpr.org",
-            "checked_at_utc": now_iso,
-            "measure": "",
-            "title": "",
-            "summary": "",
-            "hits": "",
-            "url": "",
-            "is_empty": False,
+
+        print("ERROR:", str(e))
+
+        payload = {
             "error": True,
-            "error_message": str(e),
-            "status_message": "ERROR al intentar analizar SUTRA",
-            "email_body": f"ERROR en el scraping de SUTRA:\n\n{str(e)}",
+            "message": str(e),
+            "checked_at": now,
         }
 
         try:
-            post_to_zapier(session, zapier_hook, error_payload)
-        except Exception as post_err:
-            print(f"[FATAL] Could not notify Zapier about error: {post_err}")
-
-        raise
+            post_to_zapier(session, zapier_hook, payload)
+        except:
+            pass
 
 
 if __name__ == "__main__":
