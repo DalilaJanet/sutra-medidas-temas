@@ -6,6 +6,7 @@ import hashlib
 import datetime as dt
 from typing import List, Dict
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
@@ -29,7 +30,17 @@ DATE_PATTERNS = [
     re.compile(r"(?:Fecha de Radicación|Radicada)\s*:?\s*(\d{1,2}/\d{1,2}/\d{4})", re.IGNORECASE),
     re.compile(r"\b(\d{4}-\d{2}-\d{2})\b"),
 ]
+def build_previous_day_url() -> str:
+    pr_today = dt.datetime.now(ZoneInfo("America/Puerto_Rico")).date()
+    yesterday = pr_today - dt.timedelta(days=1)
+    y = yesterday.isoformat()
 
+    return (
+        f"{BASE_URL}/medidas"
+        f"?cuatrienio_id=2025"
+        f"&fecha_radicacion_desde={y}"
+        f"&fecha_radicacion_hasta={y}"
+    )
 
 def load_state(path: str) -> Dict:
     if not os.path.exists(path):
@@ -211,16 +222,15 @@ def main() -> None:
         all_links: List[str] = []
         page_urls = build_list_pages(max_pages)
 
-        for page_url in page_urls:
-            try:
-                html = http_get(session, page_url)
-                links = extract_detail_links(html, BASE_URL)
-                print(f"[INFO] Page {page_url} -> {len(links)} candidate links")
-                all_links.extend(links)
-            except Exception as e:
-                print(f"[WARN] Failed list page {page_url}: {e}")
+        list_url = build_previous_day_url()
+        print("[INFO] Using filtered URL:", list_url)
 
-        unique_links = []
+        html = http_get(session, list_url)
+        links = extract_detail_links(html, BASE_URL)
+
+        print("[INFO] Links found for previous day:", len(links))
+
+        unique_links = list(dict.fromkeys(links))
         dedup = set()
         for link in all_links:
             if link not in dedup:
