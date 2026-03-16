@@ -179,9 +179,9 @@ def main() -> None:
         return
 
     state_path = os.environ.get("STATE_PATH", "state.json")
-    max_pages = int(os.environ.get("MAX_PAGES", "25"))
+    max_pages = int(os.environ.get("MAX_PAGES", "1025"))
     max_details = int(os.environ.get("MAX_DETAILS", "250"))
-    days_back = int(os.environ.get("DAYS_BACK", "90"))
+    days_back = int(os.environ.get("DAYS_BACK", "1"))
 
     keywords_env = (os.environ.get("KEYWORDS") or "").strip()
     kw_list = [k.strip() for k in keywords_env.split("|") if k.strip()] if keywords_env else DEFAULT_KEYWORDS
