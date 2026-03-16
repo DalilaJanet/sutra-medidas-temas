@@ -3,8 +3,8 @@ name: Scrape SUTRA medidas (temas)
 on:
   workflow_dispatch:
   schedule:
-    # 6:00am Puerto Rico = 10:00 UTC (PR no usa DST)
-    - cron: "00 10 * * *"
+    # 6:00am Puerto Rico = 10:00 UTC
+    - cron: "0 10 * * *"
 
 permissions:
   contents: write
@@ -12,8 +12,6 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    env:
-      ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
 
     steps:
       - name: Checkout
@@ -40,17 +38,14 @@ jobs:
       - name: Ensure data folder exists
         run: mkdir -p data
 
-      - name: Debug - show http_get signature
+      - name: Debug - show scraper file
         run: |
-          python -c "import inspect; from src import sutra_watch as s; print(inspect.signature(s.http_get)); print(s.__file__)"
+          python -c "from src import sutra_watch as s; print(s.__file__)"
 
       - name: Run script
         env:
           ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
           STATE_PATH: state.json
-          MAX_PAGES: "20"
-          MAX_DETAILS: "100"
-          DAYS_BACK: "1"
         run: python -u src/sutra_watch.py
 
       - name: Commit results
