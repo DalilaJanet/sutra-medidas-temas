@@ -42,7 +42,7 @@ jobs:
 
       - name: Debug - show http_get signature
         run: |
-          python -c "import inspect; import sutra_watch.py as s; print(inspect.signature(s.http_get)); print(s.__file__)"
+          python -c "import inspect; import sutra_watch as s; print(inspect.signature(s.http_get)); print(s.__file__)"
 
       - name: Run script
         env:
