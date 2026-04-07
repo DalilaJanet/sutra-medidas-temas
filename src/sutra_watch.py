@@ -12,25 +12,23 @@ import requests
 from bs4 import BeautifulSoup
 import urllib3
 
+from src.keywords import build_topics, extract_keywords
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 BASE_URL = "https://sutra.oslpr.org"
-DEFAULT_KEYWORDS = [
-    "Departamento de Educación",
-    "Municipio de San Juan",
-    "salario",
-    "trabajadores",
-]
-
 MEASURE_CODE_RE = re.compile(r"\b(?:PC|PS|RC|RS|RCC|RCS)\s*0*\d+\b", re.IGNORECASE)
 
 
 def load_state(path: str) -> Dict:
     if not os.path.exists(path):
-        return {"seen": {}}
+        return {"seen": {}, "first_seen": {}}
+
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
+
     data.setdefault("seen", {})
+    data.setdefault("first_seen", {})
     return data
 
 
@@ -56,22 +54,14 @@ def http_get(session: requests.Session, url: str, timeout: int = 25) -> str:
             return r.text
         except Exception as e:
             last_err = e
-            print(f"[GET ERROR] {e}")
+            print(f"[GET ERROR] attempt={attempt + 1} error={e}")
             time.sleep(2 * (attempt + 1))
+
     raise RuntimeError(f"GET failed for {url}: {last_err}")
 
 
-def build_previous_day_url() -> str:
-    pr_today = dt.datetime.now(ZoneInfo("America/Puerto_Rico")).date()
-    yesterday = pr_today - dt.timedelta(days=1)
-    y = yesterday.isoformat()
-
-    return (
-        f"{BASE_URL}/medidas"
-        f"?cuatrienio_id=2025"
-        f"&fecha_radicacion_desde={y}"
-        f"&fecha_radicacion_hasta={y}"
-    )
+def build_listing_url() -> str:
+    return f"{BASE_URL}/medidas?cuatrienio_id=2025"
 
 
 def extract_detail_links(list_html: str, base_url: str) -> List[str]:
@@ -96,8 +86,8 @@ def extract_detail_links(list_html: str, base_url: str) -> List[str]:
         if "/medidas/" in full:
             links.append(full)
 
-    seen = set()
     out = []
+    seen = set()
     for link in links:
         if link not in seen:
             seen.add(link)
@@ -131,61 +121,69 @@ def parse_detail_page(detail_html: str, url: str) -> Dict:
     }
 
 
-def keyword_hits(text: str, keywords: List[str]) -> List[str]:
-    t = text.lower()
-    hits = []
+def is_first_seen_yesterday(first_seen_iso: str) -> bool:
+    if not first_seen_iso:
+        return False
 
-    for kw in keywords:
-        if kw.lower() in t:
-            hits.append(kw)
+    try:
+        first_seen_dt = dt.datetime.fromisoformat(first_seen_iso)
+    except Exception:
+        return False
 
-    return hits
+    pr_tz = ZoneInfo("America/Puerto_Rico")
+    pr_today = dt.datetime.now(pr_tz).date()
+    yesterday = pr_today - dt.timedelta(days=1)
+    first_seen_date = first_seen_dt.astimezone(pr_tz).date()
+
+    return first_seen_date == yesterday
 
 
 def post_to_zapier(session: requests.Session, hook_url: str, payload: Dict) -> None:
     print("[POST] Sending to Zapier")
-    print(json.dumps(payload, ensure_ascii=False)[:600])
+    print(json.dumps(payload, ensure_ascii=False)[:700])
 
     r = session.post(hook_url, json=payload, timeout=25)
-
     print("[POST STATUS]", r.status_code)
     print(r.text[:500])
-
     r.raise_for_status()
 
 
 def main():
     zapier_hook = os.environ.get("ZAPIER_HOOK_URL", "").strip()
-
     if not zapier_hook:
         print("Missing ZAPIER_HOOK_URL")
-        return
+        raise RuntimeError("Missing ZAPIER_HOOK_URL")
 
     state_path = os.environ.get("STATE_PATH", "state.json")
-
-    keywords_env = (os.environ.get("KEYWORDS") or "").strip()
-    kw_list = [k.strip() for k in keywords_env.split("|") if k.strip()] if keywords_env else DEFAULT_KEYWORDS
-
     now = dt.datetime.now(dt.timezone.utc)
     now_iso = now.isoformat()
 
     session = requests.Session()
     state = load_state(state_path)
     seen = state["seen"]
+    first_seen = state["first_seen"]
+    topics = build_topics()
 
     try:
-        list_url = build_previous_day_url()
-        print("[INFO] Using filtered URL:", list_url)
+        list_url = build_listing_url()
+        print("[INFO] Using listing URL:", list_url)
 
         html = http_get(session, list_url)
         links = extract_detail_links(html, BASE_URL)
         unique_links = list(dict.fromkeys(links))
 
-        print("[INFO] Links found for previous day:", len(unique_links))
+        print("[INFO] Links found in listing:", len(unique_links))
 
         new_items = []
 
         for url in unique_links:
+            if url not in first_seen:
+                first_seen[url] = now_iso
+                print("[FIRST SEEN]", url, first_seen[url])
+
+            if not is_first_seen_yesterday(first_seen[url]):
+                continue
+
             try:
                 detail_html = http_get(session, url)
             except Exception as e:
@@ -194,9 +192,10 @@ def main():
 
             item = parse_detail_page(detail_html, url)
             combined = f"{item.get('title', '')} {item.get('full_text', '')}"
-            hits = keyword_hits(combined, kw_list)
+            hits = extract_keywords(combined, topics)
 
             if not hits:
+                print("[SKIP] No keyword hits:", url)
                 continue
 
             item_id = stable_id(item["url"], item["measure"], item["title"])
@@ -209,7 +208,7 @@ def main():
             item["hits"] = hits
             new_items.append(item)
 
-        print("[INFO] New matches:", len(new_items))
+        print("[INFO] New matches first seen yesterday:", len(new_items))
 
         if new_items:
             for item in new_items:
@@ -220,15 +219,13 @@ def main():
                     "hits": ", ".join(item.get("hits", [])),
                     "url": item.get("url", ""),
                     "checked_at": now_iso,
+                    "first_seen_at": first_seen.get(item.get("url", ""), ""),
                     "is_empty": False,
-                    "status": "New relevant measure found",
+                    "status": "New relevant measure first seen on the site yesterday",
                 }
 
                 post_to_zapier(session, zapier_hook, payload)
                 seen[item["id"]] = now_iso
-
-            save_state(state_path, state)
-            print("[INFO] state.json updated")
 
         else:
             payload = {
@@ -239,25 +236,17 @@ def main():
                 "url": "",
                 "checked_at": now_iso,
                 "is_empty": True,
-                "status": "No relevant measures found for previous day",
+                "status": "No relevant measures first seen on the site yesterday",
             }
-
             post_to_zapier(session, zapier_hook, payload)
-            print("[INFO] Empty result sent to Zapier")
+
+        save_state(state_path, state)
+        print("[INFO] state.json updated")
 
     except Exception as e:
-        print("[ERROR]", str(e))
-
-        payload = {
-            "error": True,
-            "message": str(e),
-            "checked_at": now_iso,
-        }
-
-        try:
-            post_to_zapier(session, zapier_hook, payload)
-        except Exception as post_err:
-            print("[FATAL] Could not notify Zapier:", post_err)
+        print("[FATAL]", e)
+        save_state(state_path, state)
+        raise
 
 
 if __name__ == "__main__":
