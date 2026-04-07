@@ -56,7 +56,7 @@ def http_get(session: requests.Session, url: str, timeout: int = 25) -> str:
     raise RuntimeError(f"GET failed for {url}: {last_err}")
 
 
-def build_recent_days_url(days_back: int = 3) -> str:
+def build_recent_days_url(days_back: int = 10) -> str:
     pr_today = dt.datetime.now(ZoneInfo("America/Puerto_Rico")).date()
     end_date = pr_today - dt.timedelta(days=1)
     start_date = end_date - dt.timedelta(days=days_back - 1)
