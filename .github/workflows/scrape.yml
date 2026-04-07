@@ -28,12 +28,15 @@ jobs:
 
       - name: Ensure state.json exists
         run: |
-          test -f state.json || echo '{"seen": {}, "first_seen": {}}' > state.json
+          if [ ! -f state.json ]; then
+            echo '{"seen": {}}' > state.json
+          fi
 
       - name: Run scraper
         env:
           ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
           STATE_PATH: state.json
+          LOOKBACK_DAYS: 20
         run: python -m src.sutra_watch
 
       - name: Commit updated state.json
