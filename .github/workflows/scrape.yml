@@ -46,8 +46,7 @@ jobs:
         env:
           ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
           STATE_PATH: state.json
-          LOOKBACK_DAYS: 10
-        run: python -m src.sutra_watch
+        run: python -u src/sutra_watch.py
 
       - name: Commit results
         run: |
