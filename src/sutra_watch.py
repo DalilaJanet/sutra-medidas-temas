@@ -22,13 +22,12 @@ MEASURE_CODE_RE = re.compile(r"\b(?:PC|PS|RC|RS|RCC|RCS)\s*0*\d+\b", re.IGNORECA
 
 def load_state(path: str) -> Dict:
     if not os.path.exists(path):
-        return {"seen": {}, "first_seen": {}}
+        return {"seen": {}}
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     data.setdefault("seen", {})
-    data.setdefault("first_seen", {})
     return data
 
 
@@ -60,8 +59,17 @@ def http_get(session: requests.Session, url: str, timeout: int = 25) -> str:
     raise RuntimeError(f"GET failed for {url}: {last_err}")
 
 
-def build_listing_url() -> str:
-    return f"{BASE_URL}/medidas?cuatrienio_id=2025"
+def build_recent_radicadas_url(days_back: int = 20) -> str:
+    pr_today = dt.datetime.now(ZoneInfo("America/Puerto_Rico")).date()
+    end_date = pr_today - dt.timedelta(days=1)
+    start_date = end_date - dt.timedelta(days=days_back - 1)
+
+    return (
+        f"{BASE_URL}/medidas"
+        f"?cuatrienio_id=2025"
+        f"&fecha_radicacion_desde={start_date.isoformat()}"
+        f"&fecha_radicacion_hasta={end_date.isoformat()}"
+    )
 
 
 def extract_detail_links(list_html: str, base_url: str) -> List[str]:
@@ -86,8 +94,8 @@ def extract_detail_links(list_html: str, base_url: str) -> List[str]:
         if "/medidas/" in full:
             links.append(full)
 
-    out = []
     seen = set()
+    out = []
     for link in links:
         if link not in seen:
             seen.add(link)
@@ -121,23 +129,6 @@ def parse_detail_page(detail_html: str, url: str) -> Dict:
     }
 
 
-def is_first_seen_yesterday(first_seen_iso: str) -> bool:
-    if not first_seen_iso:
-        return False
-
-    try:
-        first_seen_dt = dt.datetime.fromisoformat(first_seen_iso)
-    except Exception:
-        return False
-
-    pr_tz = ZoneInfo("America/Puerto_Rico")
-    pr_today = dt.datetime.now(pr_tz).date()
-    yesterday = pr_today - dt.timedelta(days=1)
-    first_seen_date = first_seen_dt.astimezone(pr_tz).date()
-
-    return first_seen_date == yesterday
-
-
 def post_to_zapier(session: requests.Session, hook_url: str, payload: Dict) -> None:
     print("[POST] Sending to Zapier")
     print(json.dumps(payload, ensure_ascii=False)[:700])
@@ -151,39 +142,32 @@ def post_to_zapier(session: requests.Session, hook_url: str, payload: Dict) -> N
 def main():
     zapier_hook = os.environ.get("ZAPIER_HOOK_URL", "").strip()
     if not zapier_hook:
-        print("Missing ZAPIER_HOOK_URL")
         raise RuntimeError("Missing ZAPIER_HOOK_URL")
 
     state_path = os.environ.get("STATE_PATH", "state.json")
+    lookback_days = int(os.environ.get("LOOKBACK_DAYS", "20"))
+
     now = dt.datetime.now(dt.timezone.utc)
     now_iso = now.isoformat()
 
     session = requests.Session()
     state = load_state(state_path)
     seen = state["seen"]
-    first_seen = state["first_seen"]
     topics = build_topics()
 
     try:
-        list_url = build_listing_url()
-        print("[INFO] Using listing URL:", list_url)
+        list_url = build_recent_radicadas_url(lookback_days)
+        print("[INFO] Using filtered URL:", list_url)
 
         html = http_get(session, list_url)
         links = extract_detail_links(html, BASE_URL)
         unique_links = list(dict.fromkeys(links))
 
-        print("[INFO] Links found in listing:", len(unique_links))
+        print("[INFO] Links found in date range:", len(unique_links))
 
         new_items = []
 
         for url in unique_links:
-            if url not in first_seen:
-                first_seen[url] = now_iso
-                print("[FIRST SEEN]", url, first_seen[url])
-
-            if not is_first_seen_yesterday(first_seen[url]):
-                continue
-
             try:
                 detail_html = http_get(session, url)
             except Exception as e:
@@ -208,7 +192,7 @@ def main():
             item["hits"] = hits
             new_items.append(item)
 
-        print("[INFO] New matches first seen yesterday:", len(new_items))
+        print("[INFO] New matches:", len(new_items))
 
         if new_items:
             for item in new_items:
@@ -219,9 +203,8 @@ def main():
                     "hits": ", ".join(item.get("hits", [])),
                     "url": item.get("url", ""),
                     "checked_at": now_iso,
-                    "first_seen_at": first_seen.get(item.get("url", ""), ""),
                     "is_empty": False,
-                    "status": "New relevant measure first seen on the site yesterday",
+                    "status": "New relevant measure found in recent radicadas window",
                 }
 
                 post_to_zapier(session, zapier_hook, payload)
@@ -236,7 +219,7 @@ def main():
                 "url": "",
                 "checked_at": now_iso,
                 "is_empty": True,
-                "status": "No relevant measures first seen on the site yesterday",
+                "status": "No new relevant measures found in recent radicadas window",
             }
             post_to_zapier(session, zapier_hook, payload)
 
