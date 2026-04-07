@@ -47,7 +47,13 @@ jobs:
           ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
           STATE_PATH: state.json
         run: python -m src.sutra_watch
-
+        
+      - name: Upload state.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: state-file
+          path: state.json
+    
       - name: Commit results
         run: |
           if [ ! -f "data/medidas_filtradas.json" ]; then
