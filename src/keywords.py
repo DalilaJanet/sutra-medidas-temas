@@ -34,8 +34,14 @@ def build_topics() -> list[Topic]:
             patterns=[
                 re.compile(r"\btrabajador(?:es|as)?\b", re.IGNORECASE),
                 re.compile(r"\bobrero(?:s|as)?\b", re.IGNORECASE),
-                re.compile(r"\bempleados?\b", re.IGNORECASE),
-                re.compile(r"\bempleadas?\b", re.IGNORECASE),
+                re.compile(r"\bempleado(?:s)?\b", re.IGNORECASE),
+                re.compile(r"\bempleada(?:s)?\b", re.IGNORECASE),
+                re.compile(r"\bservidor(?:es)?\s+p[uú]blico(?:s)?\b", re.IGNORECASE),
+                re.compile(r"\bpersonal\b", re.IGNORECASE),
+                re.compile(r"\blaboral(?:es)?\b", re.IGNORECASE),
+                re.compile(r"\brecursos?\s+humanos?\b", re.IGNORECASE),
+                re.compile(r"\bsindicato(?:s)?\b", re.IGNORECASE),
+                re.compile(r"\bnegociaci[oó]n\s+colectiva\b", re.IGNORECASE),
             ],
         ),
         Topic(
