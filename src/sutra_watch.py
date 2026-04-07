@@ -12,15 +12,11 @@ import requests
 from bs4 import BeautifulSoup
 import urllib3
 
+from src.keywords import build_topics, extract_keywords
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 BASE_URL = "https://sutra.oslpr.org"
-DEFAULT_KEYWORDS = [
-    "Departamento de Educación",
-    "Municipio de San Juan",
-    "salario",
-    "trabajadores",
-]
 
 MEASURE_CODE_RE = re.compile(r"\b(?:PC|PS|RC|RS|RCC|RCS)\s*0*\d+\b", re.IGNORECASE)
 
@@ -61,16 +57,16 @@ def http_get(session: requests.Session, url: str, timeout: int = 25) -> str:
     raise RuntimeError(f"GET failed for {url}: {last_err}")
 
 
-def build_previous_day_url() -> str:
+def build_recent_days_url(days_back: int = 3) -> str:
     pr_today = dt.datetime.now(ZoneInfo("America/Puerto_Rico")).date()
-    yesterday = pr_today - dt.timedelta(days=1)
-    y = yesterday.isoformat()
+    end_date = pr_today - dt.timedelta(days=1)
+    start_date = end_date - dt.timedelta(days=days_back - 1)
 
     return (
         f"{BASE_URL}/medidas"
         f"?cuatrienio_id=2025"
-        f"&fecha_radicacion_desde={y}"
-        f"&fecha_radicacion_hasta={y}"
+        f"&fecha_radicacion_desde={start_date.isoformat()}"
+        f"&fecha_radicacion_hasta={end_date.isoformat()}"
     )
 
 
@@ -131,17 +127,6 @@ def parse_detail_page(detail_html: str, url: str) -> Dict:
     }
 
 
-def keyword_hits(text: str, keywords: List[str]) -> List[str]:
-    t = text.lower()
-    hits = []
-
-    for kw in keywords:
-        if kw.lower() in t:
-            hits.append(kw)
-
-    return hits
-
-
 def post_to_zapier(session: requests.Session, hook_url: str, payload: Dict) -> None:
     print("[POST] Sending to Zapier")
     print(json.dumps(payload, ensure_ascii=False)[:600])
@@ -162,9 +147,7 @@ def main():
         return
 
     state_path = os.environ.get("STATE_PATH", "state.json")
-
-    keywords_env = (os.environ.get("KEYWORDS") or "").strip()
-    kw_list = [k.strip() for k in keywords_env.split("|") if k.strip()] if keywords_env else DEFAULT_KEYWORDS
+    lookback_days = int(os.environ.get("LOOKBACK_DAYS", "3"))
 
     now = dt.datetime.now(dt.timezone.utc)
     now_iso = now.isoformat()
@@ -172,16 +155,17 @@ def main():
     session = requests.Session()
     state = load_state(state_path)
     seen = state["seen"]
+    topics = build_topics()
 
     try:
-        list_url = build_previous_day_url()
+        list_url = build_recent_days_url(lookback_days)
         print("[INFO] Using filtered URL:", list_url)
 
         html = http_get(session, list_url)
         links = extract_detail_links(html, BASE_URL)
         unique_links = list(dict.fromkeys(links))
 
-        print("[INFO] Links found for previous day:", len(unique_links))
+        print("[INFO] Links found in date range:", len(unique_links))
 
         new_items = []
 
@@ -194,7 +178,7 @@ def main():
 
             item = parse_detail_page(detail_html, url)
             combined = f"{item.get('title', '')} {item.get('full_text', '')}"
-            hits = keyword_hits(combined, kw_list)
+            hits = extract_keywords(combined, topics)
 
             if not hits:
                 continue
@@ -239,25 +223,13 @@ def main():
                 "url": "",
                 "checked_at": now_iso,
                 "is_empty": True,
-                "status": "No relevant measures found for previous day",
+                "status": "No new relevant measures found",
             }
-
             post_to_zapier(session, zapier_hook, payload)
-            print("[INFO] Empty result sent to Zapier")
 
     except Exception as e:
-        print("[ERROR]", str(e))
-
-        payload = {
-            "error": True,
-            "message": str(e),
-            "checked_at": now_iso,
-        }
-
-        try:
-            post_to_zapier(session, zapier_hook, payload)
-        except Exception as post_err:
-            print("[FATAL] Could not notify Zapier:", post_err)
+        print("[FATAL]", e)
+        raise
 
 
 if __name__ == "__main__":
