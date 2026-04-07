@@ -46,7 +46,7 @@ jobs:
         env:
           ZAPIER_HOOK_URL: ${{ secrets.ZAPIER_HOOK_URL }}
           STATE_PATH: state.json
-        run: python -u src/sutra_watch.py
+        run: python -m src.sutra_watch
 
       - name: Commit results
         run: |
