@@ -146,7 +146,7 @@ def main():
         return
 
     state_path = os.environ.get("STATE_PATH", "state.json")
-    lookback_days = int(os.environ.get("LOOKBACK_DAYS", "3"))
+    lookback_days = int(os.environ.get("LOOKBACK_DAYS", "10"))
 
     now = dt.datetime.now(dt.timezone.utc)
     now_iso = now.isoformat()
