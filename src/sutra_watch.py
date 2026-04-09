@@ -159,9 +159,32 @@ def main():
         list_url = build_recent_radicadas_url(lookback_days)
         print("[INFO] Using filtered URL:", list_url)
 
-        html = http_get(session, list_url)
+def get_links_from_pages(session, base_url, max_pages=25):
+    all_links = []
+
+    for page in range(1, max_pages + 1):
+        paginated_url = f"{base_url}&page={page}"
+        print(f"[PAGE] Fetching page {page}: {paginated_url}")
+
+        try:
+            html = http_get(session, paginated_url)
+        except Exception as e:
+            print("[WARN] Failed page:", page, e)
+            continue
+
         links = extract_detail_links(html, BASE_URL)
-        unique_links = list(dict.fromkeys(links))
+
+        print(f"[INFO] Links found on page {page}: {len(links)}")
+
+        if not links:
+            print("[STOP] No more links, stopping pagination")
+            break
+
+        all_links.extend(links)
+
+    # eliminar duplicados
+    return list(dict.fromkeys(all_links))
+        unique_links = get_links_from_pages(session, list_url, max_pages=25)
 
         print("[INFO] Links found in date range:", len(unique_links))
 
