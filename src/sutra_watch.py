@@ -15,7 +15,7 @@ import urllib3
 from src.keywords import build_topics, extract_keywords
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+RADICACION_RE = re.compile(r"Radicada:\s*(\d{2}/\d{2}/\d{4})", re.IGNORECASE)
 BASE_URL = "https://sutra.oslpr.org"
 MEASURE_CODE_RE = re.compile(r"\b(?:PC|PS|RC|RS|RCC|RCS)\s*0*\d+\b", re.IGNORECASE)
 
@@ -136,6 +136,9 @@ def parse_detail_page(detail_html: str, url: str) -> Dict:
     measure_match = MEASURE_CODE_RE.search(text)
     measure = measure_match.group(0).upper().replace(" ", "") if measure_match else ""
 
+    radicacion_match = RADICACION_RE.search(text)
+    fecha_radicacion = radicacion_match.group(1) if radicacion_match else ""
+
     title = ""
     h1 = soup.find(["h1", "h2"])
     if h1 and h1.get_text(strip=True):
@@ -149,6 +152,7 @@ def parse_detail_page(detail_html: str, url: str) -> Dict:
         "url": url,
         "measure": measure,
         "title": title,
+        "fecha_radicacion": fecha_radicacion,
         "full_text": text,
         "summary": summary,
     }
@@ -227,6 +231,7 @@ def main():
                     "checked_at": now_iso,
                     "is_empty": False,
                     "status": "New relevant measure found in recent radicadas window",
+                    "fecha_radicacion": item.get("fecha_radicacion", ""),
                 }
 
                 post_to_zapier(session, zapier_hook, payload)
