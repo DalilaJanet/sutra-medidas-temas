@@ -104,6 +104,31 @@ def extract_detail_links(list_html: str, base_url: str) -> List[str]:
     return out
 
 
+def get_links_from_pages(session: requests.Session, base_url: str, max_pages: int = 25) -> List[str]:
+    all_links = []
+
+    for page in range(1, max_pages + 1):
+        paginated_url = f"{base_url}&page={page}"
+        print(f"[PAGE] Fetching page {page}: {paginated_url}")
+
+        try:
+            html = http_get(session, paginated_url)
+        except Exception as e:
+            print(f"[WARN] Failed page {page}: {e}")
+            continue
+
+        links = extract_detail_links(html, BASE_URL)
+        print(f"[INFO] Links found on page {page}: {len(links)}")
+
+        if not links:
+            print("[STOP] No more links, stopping pagination")
+            break
+
+        all_links.extend(links)
+
+    return list(dict.fromkeys(all_links))
+
+
 def parse_detail_page(detail_html: str, url: str) -> Dict:
     soup = BeautifulSoup(detail_html, "lxml")
     text = soup.get_text(" ", strip=True)
@@ -159,33 +184,7 @@ def main():
         list_url = build_recent_radicadas_url(lookback_days)
         print("[INFO] Using filtered URL:", list_url)
 
-def get_links_from_pages(session, base_url, max_pages=25):
-    all_links = []
-
-    for page in range(1, max_pages + 1):
-        paginated_url = f"{base_url}&page={page}"
-        print(f"[PAGE] Fetching page {page}: {paginated_url}")
-
-        try:
-            html = http_get(session, paginated_url)
-        except Exception as e:
-            print("[WARN] Failed page:", page, e)
-            continue
-
-        links = extract_detail_links(html, BASE_URL)
-
-        print(f"[INFO] Links found on page {page}: {len(links)}")
-
-        if not links:
-            print("[STOP] No more links, stopping pagination")
-            break
-
-        all_links.extend(links)
-
-    # eliminar duplicados
-    return list(dict.fromkeys(all_links))
         unique_links = get_links_from_pages(session, list_url, max_pages=25)
-
         print("[INFO] Links found in date range:", len(unique_links))
 
         new_items = []
@@ -232,7 +231,6 @@ def get_links_from_pages(session, base_url, max_pages=25):
 
                 post_to_zapier(session, zapier_hook, payload)
                 seen[item["id"]] = now_iso
-
         else:
             payload = {
                 "measure": "",
@@ -250,7 +248,9 @@ def get_links_from_pages(session, base_url, max_pages=25):
         print("[INFO] state.json updated")
 
     except Exception as e:
-        print("[FATAL]", e)
+        import traceback
+        print("[FATAL]", repr(e))
+        traceback.print_exc()
         save_state(state_path, state)
         raise
 
