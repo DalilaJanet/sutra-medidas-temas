@@ -15,7 +15,10 @@ import urllib3
 from src.keywords import build_topics, extract_keywords
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-RADICACION_RE = re.compile(r"Radicada:\s*(\d{2}/\d{2}/\d{4})", re.IGNORECASE)
+RADICACION_RE = re.compile(
+    r"(?:Fecha\s+de\s+Radicaci[oó]n|Radicad[oa])\s*:?\s*(\d{1,2}/\d{1,2}/\d{4})",
+    re.IGNORECASE,
+)
 BASE_URL = "https://sutra.oslpr.org"
 MEASURE_CODE_RE = re.compile(r"\b(?:PC|PS|RC|RS|RCC|RCS)\s*0*\d+\b", re.IGNORECASE)
 
@@ -138,6 +141,15 @@ def parse_detail_page(detail_html: str, url: str) -> Dict:
 
     radicacion_match = RADICACION_RE.search(text)
     fecha_radicacion = radicacion_match.group(1) if radicacion_match else ""
+
+    if not fecha_radicacion:
+        generic_date_match = re.search(
+            r"\b(\d{1,2}/\d{1,2}/\d{4})\b",
+            text,
+            re.IGNORECASE,
+        )
+        if generic_date_match:
+            fecha_radicacion = generic_date_match.group(1)
 
     title = ""
     h1 = soup.find(["h1", "h2"])
