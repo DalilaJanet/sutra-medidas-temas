@@ -12,8 +12,6 @@ import requests
 from bs4 import BeautifulSoup
 import urllib3
 
-from src.keywords import build_topics, extract_keywords
-
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 RADICACION_RE = re.compile(
     r"(?:Fecha\s+de\s+Radicaci[oó]n|Radicad[oa])\s*:?\s*(\d{1,2}/\d{1,2}/\d{4})",
