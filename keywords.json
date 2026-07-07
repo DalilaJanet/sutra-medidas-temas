@@ -1,0 +1,58 @@
+{
+  "Trabajadores": [
+    "trabajador",
+    "trabajadores",
+    "trabajadora",
+    "trabajadoras",
+    "empleado",
+    "empleados",
+    "empleada",
+    "empleadas",
+    "obrero",
+    "obreros",
+    "obrera",
+    "obreras",
+    "laboral",
+    "laborales",
+    "personal",
+    "empleomanía",
+    "recursos humanos",
+    "sindicato",
+    "sindicatos",
+    "negociación colectiva",
+    "convenio colectivo",
+    "patrono",
+    "patronos",
+    "servidor público",
+    "servidores públicos"
+  ],
+
+  "Salarios": [
+    "salario",
+    "salarios",
+    "sueldo",
+    "sueldos",
+    "compensación",
+    "compensaciones",
+    "remuneración",
+    "jornal",
+    "escala salarial",
+    "salario mínimo",
+    "aumento salarial"
+  ],
+
+  "Educación": [
+    "Departamento de Educación",
+    "escuela",
+    "escuelas",
+    "maestro",
+    "maestros",
+    "docente",
+    "docentes"
+  ],
+
+  "Municipio San Juan": [
+    "Municipio de San Juan",
+    "Alcaldía de San Juan"
+  ]
+}
