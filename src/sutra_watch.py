@@ -23,6 +23,35 @@ BASE_URL = "https://sutra.oslpr.org"
 MEASURE_CODE_RE = re.compile(r"\b(?:PC|PS|RC|RS|RCC|RCS)\s*0*\d+\b", re.IGNORECASE)
 
 
+def load_keywords(path="keywords.json"):
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    topics = {}
+
+    for topic, words in data.items():
+        topics[topic] = [
+            re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
+            for word in words
+        ]
+
+    return topics
+
+def extract_keywords(text, topics):
+
+    found = []
+
+    for topic, patterns in topics.items():
+
+        for pattern in patterns:
+
+            if pattern.search(text):
+                found.append(topic)
+                break
+
+    return found
+
+
 def load_state(path: str) -> Dict:
     if not os.path.exists(path):
         return {"seen": {}}
@@ -194,7 +223,7 @@ def main():
     session = requests.Session()
     state = load_state(state_path)
     seen = state["seen"]
-    topics = build_topics()
+    topics = load_keywords()
 
     try:
         list_url = build_recent_radicadas_url(lookback_days)
